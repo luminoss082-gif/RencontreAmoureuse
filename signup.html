@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Inscription</title>
+
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="favicon.ico">
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script src="js/core/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script type="module" src="js/ui/search-ui.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui;
+      background: linear-gradient(-45deg,#ff4d6d,#7b2ff7,#00c6ff);
+      background-size: 400% 400%;
+      animation: bg 12s ease infinite;
+      min-height: 100vh;
+    }
+
+    @keyframes bg {
+      0%{background-position:0% 50%}
+      50%{background-position:100% 50%}
+      100%{background-position:0% 50%}
+    }
+
+    main {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 85vh;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(15px);
+      padding: 30px;
+      border-radius: 20px;
+      width: 340px;
+      text-align: center;
+      color: white;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+    .card h2 {
+      margin-bottom: 5px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 12px;
+      border: none;
+      outline: none;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg,#ff4d6d,#ffb703);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      transform: scale(1.03);
+    }
+
+    #errorMsg {
+      color: #ffcccc;
+      font-size: 14px;
+    }
+
+    .login-link {
+      margin-top: 15px;
+      font-size: 13px;
+    }
+
+    .login-link a {
+      color: white;
+      font-weight: bold;
+    }
+
+  </style>
+</head>
+
+<body><!-- NAV (IDENTIQUE, NON MODIFIÉE) -->
+<nav class="header">
+
+  <div class="nav-left">
+    <a href="index.html">🏠 Accueil</a>
+    <a href="profile.html">👤 Profil</a>
+    <a href="pageDesProfils.html">🔍 Recherche</a>
+    <a href="signup.html">👤 Inscription</a>
+  </div>
+ <div class="box">
+<div class="nav-right">
+<button id="authBtn">Connexion</button>
+    <span class="online-dot"></span>
+  </div>
+  <!-- ADMIN (caché par défaut) -->
+    <a id="adminLink" href="adminPage.html" style="display:none;">👤 Admin</a>
+</div>
+</nav>
+
+
+
+<!-- SIGNUP -->
+<main>
+
+  <div class="card">
+
+    <h2>💘 Inscription</h2>
+    <p>Crée ton compte et trouve l’amour</p>
+
+    <input id="email" type="email" placeholder="📧 Email" autocomplete="email">
+    <input id="password" type="password" placeholder="🔒 Mot de passe" autocomplete="new-password">
+
+    <button onclick="signup()">Créer mon compte</button>
+
+    <p id="errorMsg"></p>
+
+    <p class="login-link">
+      Déjà un compte ?
+      <a href="login.html">Connexion</a>
+    </p>
+
+  </div>
+
+</main>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.body.style.visibility = "visible";
+});
+</script>
+
+</body>
+</html>

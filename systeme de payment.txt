@@ -1,0 +1,7 @@
+💰 SYSTÈME PREMIUM PAR CODE (PROPRE & SIMPLE)
+🧠 Principe
+L’utilisateur paie ailleurs (PayPal / virement / CashApp / etc.)
+Tu lui donnes un code unique
+Il l’active dans ton app
+is_premium = true
+Il peut discuter

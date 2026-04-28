@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Support WhatsApp</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/core/config.js"></script>
+<script src="js/auth.js" defer></script>
+<style>
+body {
+  margin:0;
+  font-family:Arial;
+  background: linear-gradient(-45deg,#ff4d6d,#7b2ff7,#00c6ff);
+  background-size:400% 400%;
+  animation:bg 10s ease infinite;
+  color:white;
+}
+
+@keyframes bg {
+  0%{background-position:0% 50%;}
+  50%{background-position:100% 50%;}
+  100%{background-position:0% 50%;}
+}
+
+.container {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
+  padding:20px;
+}
+
+.card {
+  background:rgba(0,0,0,0.3);
+  padding:30px;
+  border-radius:20px;
+  backdrop-filter:blur(10px);
+  width:100%;
+  max-width:450px;
+  text-align:center;
+}
+
+.admin {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:rgba(255,255,255,0.1);
+  padding:10px;
+  border-radius:10px;
+  margin:10px 0;
+}
+
+.admin img {
+  width:40px;
+  height:40px;
+  border-radius:50%;
+}
+
+button {
+  padding:8px 12px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  background:#25D366;
+  color:white;
+}
+
+input, textarea {
+  width:100%;
+  margin:8px 0;
+  padding:10px;
+  border-radius:10px;
+  border:none;
+}
+.header {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+
+  gap: 12px;
+  padding: 15px;
+
+  background: rgba(0,0,0,0.2);
+  backdrop-filter: blur(12px);
+}
+
+.header a {
+  color: white;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  transition: 0.2s;
+}
+
+.header a:hover {
+  background: rgba(255,255,255,0.2);
+}
+</style>
+</head>
+<nav class="header">
+  <div class="nav-left">
+    <a href="index.html">🏠 Accueil</a>
+    <a href="profile.html">👤 Profil</a>
+    <a href="pageDesProfils.html">🔍 Recherche</a>
+     <a href="premium.html">💎 Premium</a> 
+  </div>
+  <div class="nav-right">
+    <button id="authBtn">Connexion</button>
+    <span class="online-dot"></span>
+  </div>
+</nav>
+<body>
+
+<div class="container">
+  <div class="card">
+
+    <h1>💬 Support WhatsApp</h1>
+
+    <input id="name" placeholder="Ton prénom">
+    <textarea id="message" placeholder="Ton message..."></textarea>
+
+    <h3>👨‍💻 Choisir un admin</h3>
+
+    <div id="admins"></div>
+<button onclick="contactSmart()">
+  🤖 Contacter Admin intelligent
+</button>
+  </div>
+</div>
+
+<script>
+
+let lastAdminId = null;
+let lastClickTime = 0;
+
+async function contactSmart() {
+
+  try {
+
+    const name = document.getElementById("name")?.value || "Utilisateur";
+    const message = document.getElementById("message")?.value || "";
+
+    // 🔹 1. récupérer admins actifs triés par workload
+    const { data: admins, error } = await supabaseClient
+      .from("admins")
+      .select("*")
+      .eq("active", true)
+      .order("workload", { ascending: true });
+
+    if (error || !admins || admins.length === 0) {
+      alert("❌ Aucun admin disponible");
+      return;
+    }
+
+    // 🎯 2. choisir admin le moins chargé
+    const selected = admins[0];
+
+    // 🔹 3. récupérer user
+    const { data: userData } = await supabaseClient.auth.getUser();
+    const user = userData.user;
+
+    // 🔹 4. créer ticket
+    await supabaseClient.from("support_tickets").insert({
+      user_id: user.id,
+      admin_id: selected.id,
+      message: message
+    });
+
+    // 🔹 5. update stats admin
+    await supabaseClient
+      .from("admins")
+      .update({
+        workload: selected.workload + 1,
+        total_contacts: selected.total_contacts + 1
+      })
+      .eq("id", selected.id);
+
+    // 🔹 6. log
+    await supabaseClient.from("admin_logs").insert({
+      admin_id: selected.id,
+      action: "assigned_ticket",
+      target_id: user.id
+    });
+
+    // 🔹 7. ouvrir WhatsApp
+    const text = encodeURIComponent(
+      `Bonjour 👋\n\n` +
+      `Nom: ${name}\n` +
+      `Ticket ID: ${selected.id}\n\n` +
+      `Message:\n${message}`
+    );
+
+    window.open(`https://wa.me/${selected.phone}?text=${text}`, "_blank");
+
+    alert("✅ Admin assigné automatiquement");
+
+  } catch (e) {
+    console.error(e);
+    alert("Erreur système support");
+  }
+}
+
+/* LISTE ADMINS */
+const admins = [
+  {
+    name: "Jeffrey",
+    phone: "33676615490",
+    avatar: "https://i.pravatar.cc/100?img=1"
+  },
+  {
+    name: "Déborah",
+    phone: "33698652751",
+    avatar: "https://i.pravatar.cc/100?img=2"
+  },
+  {
+    name: "Noella",
+    phone: "33633333333",
+    avatar: "https://i.pravatar.cc/100?img=3"
+  }
+];
+
+/* LOAD ADMINS FROM SUPABASE */
+let adminsData = [];
+
+async function loadAdmins() {
+
+  const { data } = await supabaseClient
+    .from("admins")
+    .select("*")
+    .eq("active", true);
+
+  adminsData = data || [];
+
+  const box = document.getElementById("admins");
+  box.innerHTML = "";
+
+  adminsData.forEach(a => {
+
+    const div = document.createElement("div");
+    div.className = "admin";
+
+    div.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img src="${a.avatar || 'https://i.pravatar.cc/100'}">
+        <span>${a.name}</span>
+      </div>
+
+      <button onclick="contact('${a.phone}', '${a.name}')">
+        💬
+      </button>
+    `;
+
+    box.appendChild(div);
+  });
+}
+
+/* CONTACT */
+function contact(phone, adminName) {
+
+  const name = document.getElementById("name").value || "Utilisateur";
+  const message = document.getElementById("message").value || "";
+
+  const text = encodeURIComponent(
+    `Bonjour 👋\n\nAdmin: ${adminName}\nNom: ${name}\n\nMessage:\n${message}`
+  );
+
+  window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
+}
+
+/* INIT */
+loadAdmins();
+const random = data[Math.floor(Math.random() * data.length)];
+</script>
+
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Recherche profils</title>
+
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="favicon.ico">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/core/config.js"></script>
+<script src="js/auth.js" defer></script>
+
+<style>
+body { visibility:hidden; margin:0; font-family:sans-serif; }
+
+.container { padding:20px; }
+
+#profilesGrid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:15px;
+  margin-top:20px;
+}
+
+.card {
+  background:rgba(255,255,255,0.08);
+  padding:10px;
+  border-radius:12px;
+  cursor:pointer;
+  text-align:center;
+}
+
+.card img {
+  width:100%;
+  height:160px;
+  object-fit:cover;
+  border-radius:10px;
+}
+
+.modal {
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.6);
+  justify-content:center;
+  align-items:center;
+}
+
+.modal-content {
+  background:#e76666;
+  padding:20px;
+  border-radius:15px;
+  text-align:center;
+  max-width:500px;
+  width:90%;
+}
+</style>
+</head>
+
+<body>
+
+<nav class="header">
+  <div class="nav-left">
+    <a href="index.html">🏠 Accueil</a>
+    <a href="profile.html">👤 Profil</a>
+    <a href="pageDesProfils.html">🔍 Recherche</a>
+     <a href="premium.html">💎 Premium</a> 
+      <a href="contact.html">💬 Contact Admin</a>
+        <a href="adminPage.html">👤 Admin</a>
+  </div>
+  <div class="nav-right">
+    <button id="authBtn">Connexion</button>
+    <span class="online-dot"></span>
+  </div>
+</nav>
+
+<main class="container">
+
+<h1>💘 Recherche de profils</h1>
+
+<div id="profilesGrid"></div>
+
+<!-- PROFILE MODAL -->
+<div id="profileModal" class="modal">
+  <div class="modal-content">
+
+    <img id="viewPhoto" width="150" style="border-radius:10px;">
+    <h2 id="viewName"></h2>
+    <p id="viewInfo"></p>
+    <p id="viewBio"></p>
+
+    <button onclick="startChat()">💬 Chat</button>
+    <button onclick="closeModal()">❌ Close</button>
+      <div id="premiumBadge"></div>
+
+  </div>
+</div>
+
+</main>
+
+<script>
+const state = {
+  user: null,
+  selected: null
+};
+
+let chatTarget = null;
+
+/* ================= INIT ================= */
+document.addEventListener("DOMContentLoaded", async () => {
+
+  const { data } = await supabaseClient.auth.getUser();
+
+  if (!data?.user) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  state.user = data.user;
+
+  await loadProfiles();
+
+  document.body.style.visibility = "visible";
+});
+
+/* ================= LOAD PROFILES ================= */
+async function loadProfiles() {
+
+  const { data } = await supabaseClient
+    .from("profiles")
+    .select("*")
+    .neq("user_id", state.user.id);
+
+  const grid = document.getElementById("profilesGrid");
+  grid.innerHTML = "";
+
+  data.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "card";
+
+    div.innerHTML = `
+      <img src="${p.photo || 'https://picsum.photos/200'}">
+      <h3>${p.prenom}</h3>
+      <p>${p.age} ans • ${p.ville}</p>
+    `;
+
+    div.onclick = () => openProfile(p);
+    grid.appendChild(div);
+  });
+}
+
+/* ================= PROFILE ================= */
+function openProfile(p) {
+
+  state.selected = p;
+
+  document.getElementById("profileModal").style.display = "flex";
+
+  viewPhoto.src = p.photo || "https://picsum.photos/200";
+  viewName.textContent = p.prenom;
+  viewInfo.textContent = `${p.age} ans • ${p.ville}`;
+  viewBio.textContent = p.bio || "";
+}
+
+function closeModal() {
+  document.getElementById("profileModal").style.display = "none";
+}
+
+/* ================= CHAT ================= */
+function startChat() {
+  if (!state.selected) return;
+
+  // on sauvegarde le profil sélectionné
+  localStorage.setItem("chatTarget", JSON.stringify(state.selected));
+
+  // redirection vers chat.html
+  window.location.href = "chat.html";
+}
+
+function closeChatPopup() {
+  document.getElementById("chatPopup").style.display = "none";
+}
+
+/* ================= LOAD MESSAGES ================= */
+async function loadMessages() {
+
+  const { data } = await supabaseClient
+    .from("messages")
+    .select("*")
+    .or(`
+      and(sender_id.eq.${state.user.id},receiver_id.eq.${chatTarget.user_id}),
+      and(sender_id.eq.${chatTarget.user_id},receiver_id.eq.${state.user.id})
+    `)
+    .order("created_at");
+
+  const box = document.getElementById("chatMessages");
+  box.innerHTML = "";
+
+  data.forEach(renderMessage);
+}
+
+/* ================= RENDER ================= */
+function renderMessage(m) {
+
+  const div = document.createElement("div");
+
+  div.style.padding = "8px";
+  div.style.margin = "5px";
+  div.style.borderRadius = "10px";
+  div.style.maxWidth = "70%";
+  div.style.color = "white";
+
+  div.style.background =
+    m.sender_id === state.user.id ? "#ff4d6d" : "#333";
+
+  div.style.marginLeft =
+    m.sender_id === state.user.id ? "auto" : "0";
+
+  div.textContent = m.content;
+
+  document.getElementById("chatMessages").appendChild(div);
+}
+
+
+</script>
+
+</body>
+</html>

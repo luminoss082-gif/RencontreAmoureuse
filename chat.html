@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Chat App</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/core/config.js"></script>
+
+<style>
+body {
+  margin:0;
+  font-family:Arial;
+  background: linear-gradient(-45deg, #ff4d6d, #7b2ff7, #00c6ff);
+  background-size: 400% 400%;
+  animation: bg 12s ease infinite;
+  color:white;
+}
+
+@keyframes bg {
+  0% { background-position:0% 50%; }
+  50% { background-position:100% 50%; }
+  100% { background-position:0% 50%; }
+}
+
+/* NAV */
+nav {
+  display:flex;
+  justify-content:center;
+  gap:15px;
+  padding:15px;
+  background:rgba(0,0,0,0.25);
+  backdrop-filter: blur(10px);
+}
+
+nav a {
+  color:white;
+  text-decoration:none;
+  opacity:0.8;
+}
+nav a:hover { opacity:1; }
+
+/* LAYOUT */
+.layout {
+  display:flex;
+  height:calc(100vh - 60px);
+}
+
+/* USERS */
+.users {
+  width:320px;
+  overflow-y:auto;
+  background:rgba(0,0,0,0.2);
+  border-right:1px solid rgba(255,255,255,0.1);
+}
+
+.user {
+  display:flex;
+  gap:10px;
+  padding:12px;
+  cursor:pointer;
+  align-items:center;
+}
+
+.user:hover {
+  background:rgba(255,255,255,0.1);
+}
+
+.user img {
+  width:45px;
+  height:45px;
+  border-radius:50%;
+}
+
+/* CHAT */
+.chat {
+  flex:1;
+  display:flex;
+  flex-direction:column;
+}
+
+.header {
+  padding:10px;
+  background:rgba(0,0,0,0.25);
+  font-weight:bold;
+}
+
+.messages {
+  flex:1;
+  overflow-y:auto;
+  padding:10px;
+}
+
+.msg {
+  max-width:60%;
+  padding:8px;
+  margin:6px;
+  border-radius:10px;
+  word-wrap:break-word;
+}
+
+.me {
+  background:#ff4d6d;
+  margin-left:auto;
+}
+
+.them {
+  background:#333;
+}
+
+/* INPUT */
+.input {
+  display:flex;
+  padding:10px;
+  gap:5px;
+  background:rgba(0,0,0,0.2);
+}
+
+.input input {
+  flex:1;
+  padding:10px;
+  border:none;
+  border-radius:8px;
+}
+
+.input button {
+  padding:10px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
+
+/* EMOJI */
+#emojiPanel {
+  display:none;
+  position:fixed;
+  bottom:80px;
+  left:20px;
+  background:#111;
+  padding:10px;
+  border-radius:10px;
+}
+
+#emojiPanel span {
+  cursor:pointer;
+  font-size:20px;
+  margin:5px;
+}
+</style>
+</head>
+
+<body>
+
+<nav>
+  <a href="index.html">🏠 Accueil</a>
+  <a href="profile.html">👤 Profil</a>
+  <a href="pageDesProfils.html">🔍 Profils</a>
+  <a href="adminPage.html">👤 Admin</a>
+  <a href="premium.html">💎 Premium</a>
+</nav>
+
+<div class="layout">
+
+  <div class="users" id="users"></div>
+
+  <div class="chat">
+
+    <div class="header" id="chatHeader">
+      💬 Sélectionne un chat
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="input">
+      <button onclick="toggleEmoji()">😄</button>
+      <input id="input" placeholder="Message...">
+      <button onclick="send()">➤</button>
+      <button onclick="startRecording()">🎤</button>
+    </div>
+
+  </div>
+</div>
+
+<div id="emojiPanel">
+  <span>😀</span>
+  <span>😂</span>
+  <span>😍</span>
+  <span>🔥</span>
+  <span>❤️</span>
+  <span>👍</span>
+  <span>😎</span>
+</div>
+
+<script>
+
+const state = {
+  user: null,
+  current: null
+};
+
+let mediaRecorder;
+let chunks = [];
+let isPremium = false;
+
+/* INIT */
+document.addEventListener("DOMContentLoaded", async () => {
+
+  const { data } = await supabaseClient.auth.getUser();
+  if (!data?.user) return location.href = "login.html";
+
+  state.user = data.user;
+
+  await loadUserProfile();
+  loadUsers();
+  listenMessages();
+});
+
+/* PREMIUM */
+async function loadUserProfile() {
+  const { data } = await supabaseClient
+    .from("profiles")
+    .select("is_premium")
+    .eq("user_id", state.user.id)
+    .single();
+
+  isPremium = data?.is_premium || false;
+}
+
+/* USERS */
+async function loadUsers() {
+
+  const { data } = await supabaseClient
+    .from("profiles")
+    .select("*")
+    .neq("user_id", state.user.id);
+
+  const box = document.getElementById("users");
+  box.innerHTML = "";
+
+  data.forEach(u => {
+
+    const div = document.createElement("div");
+    div.className = "user";
+
+    div.innerHTML = `
+      <img src="${u.photo || 'https://picsum.photos/50'}">
+      <div>
+        <b>${u.prenom}</b><br>
+        <small>${u.online ? "🟢 online" : "⚪ offline"}</small>
+      </div>
+    `;
+
+    div.onclick = () => openChat(u);
+    box.appendChild(div);
+  });
+}
+
+/* OPEN CHAT */
+function openChat(u) {
+  state.current = u;
+  document.getElementById("chatHeader").textContent = "💬 " + u.prenom;
+  loadMessages();
+}
+
+/* LOAD MSG */
+async function loadMessages() {
+
+  if (!state.current) return;
+
+  const { data } = await supabaseClient
+    .from("messages")
+    .select("*")
+    .or(
+      `and(sender_id.eq.${state.user.id},receiver_id.eq.${state.current.user_id}),and(sender_id.eq.${state.current.user_id},receiver_id.eq.${state.user.id})`
+    )
+    .order("created_at");
+
+  const box = document.getElementById("messages");
+  box.innerHTML = "";
+
+  (data || []).forEach(render);
+}
+
+/* RENDER */
+function render(m) {
+
+  const div = document.createElement("div");
+  div.className = "msg " + (m.sender_id === state.user.id ? "me" : "them");
+
+  div.textContent = m.content || "";
+
+  if (m.sender_id === state.user.id) {
+
+    const tick = document.createElement("div");
+    tick.style.fontSize = "10px";
+    tick.textContent = m.is_read ? "✔✔ vu" : "✔ envoyé";
+    div.appendChild(tick);
+
+    const del = document.createElement("div");
+    del.textContent = "🗑";
+    del.style.cursor = "pointer";
+    del.onclick = () => deleteMessage(m.id);
+    div.appendChild(del);
+  }
+
+  document.getElementById("messages").appendChild(div);
+}
+
+/* SEND */
+async function send() {
+
+  if (!isPremium) {
+    alert("🔒 Premium requis");
+    return;
+  }
+
+  if (!state.current) return;
+
+  const input = document.getElementById("input");
+  const text = input.value.trim();
+
+  if (!text) return;
+
+  await supabaseClient.from("messages").insert({
+    sender_id: state.user.id,
+    receiver_id: state.current.user_id,
+    content: text,
+    is_read: false
+  });
+
+  input.value = "";
+}
+
+/* DELETE */
+async function deleteMessage(id) {
+  await supabaseClient.from("messages").delete().eq("id", id);
+  loadMessages();
+}
+
+/* REALTIME */
+function listenMessages() {
+
+  supabaseClient
+    .channel("msg")
+    .on("postgres_changes",
+      { event:"INSERT", schema:"public", table:"messages" },
+      payload => {
+
+        const m = payload.new;
+        if (!state.current) return;
+
+        if (
+          (m.sender_id === state.current.user_id && m.receiver_id === state.user.id) ||
+          (m.sender_id === state.user.id && m.receiver_id === state.current.user_id)
+        ) {
+          render(m);
+        }
+      })
+    .subscribe();
+}
+
+/* EMOJI */
+function toggleEmoji() {
+  const p = document.getElementById("emojiPanel");
+  p.style.display = p.style.display === "block" ? "none" : "block";
+}
+
+document.getElementById("emojiPanel").onclick = (e) => {
+  if (e.target.tagName === "SPAN") {
+    document.getElementById("input").value += e.target.textContent;
+  }
+};
+
+/* VOICE */
+async function startRecording() {
+
+  if (!state.current) return;
+
+  const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+
+  mediaRecorder = new MediaRecorder(stream);
+  chunks = [];
+
+  mediaRecorder.ondataavailable = e => chunks.push(e.data);
+
+  mediaRecorder.onstop = async () => {
+
+    const blob = new Blob(chunks, { type:"audio/webm" });
+    const reader = new FileReader();
+
+    reader.onloadend = async () => {
+
+      await supabaseClient.from("messages").insert({
+        sender_id: state.user.id,
+        receiver_id: state.current.user_id,
+        audio: reader.result
+      });
+
+      loadMessages();
+    };
+
+    reader.readAsDataURL(blob);
+  };
+
+  mediaRecorder.start();
+
+  setTimeout(() => {
+    mediaRecorder.stop();
+    stream.getTracks().forEach(t => t.stop());
+  }, 4000);
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Premium</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/core/config.js"></script>
+<script src="js/auth.js" defer></script>
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background: linear-gradient(-45deg,#ff4d6d,#7b2ff7,#00c6ff);
+  background-size:400% 400%;
+  animation:bg 10s ease infinite;
+  color:white;
+}
+
+@keyframes bg {
+  0%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+
+.container{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+
+.card{
+  background:rgba(0,0,0,0.4);
+  padding:30px;
+  border-radius:20px;
+  text-align:center;
+  width:320px;
+  backdrop-filter: blur(10px);
+}
+
+h1{margin-bottom:10px}
+
+.price{
+  font-size:30px;
+  margin:20px 0;
+}
+
+.btn{
+  background:#ff4d6d;
+  border:none;
+  padding:12px;
+  width:100%;
+  border-radius:10px;
+  color:white;
+  cursor:pointer;
+  font-size:16px;
+}
+.header {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+
+  gap: 12px;
+  padding: 15px;
+
+  background: rgba(0,0,0,0.2);
+  backdrop-filter: blur(12px);
+}
+
+.header a {
+  color: white;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  transition: 0.2s;
+}
+
+.header a:hover {
+  background: rgba(255,255,255,0.2);
+}
+.btn {
+  padding:10px;
+  background:rgba(0,0,0,0.25);
+  font-weight:bold;
+}
+.btn:hover{
+  opacity:0.8;
+}
+a{
+  color:white;
+  text-decoration:none;
+   background:#e76666;
+  padding:20px;
+  border-radius:15px;
+  text-align:center;
+  max-width:500px;
+  width:80%;
+}
+a:hover{
+  opacity:0.8;
+   background:#e76666;
+  padding:20px;
+  border-radius:15px;
+  text-align:center;
+  max-width:500px;
+  width:90%;  
+}
+</style>
+<nav class="header">
+  <div class="nav-left">
+    <a href="index.html">🏠 Accueil</a>
+    <a href="profile.html">👤 Profil</a>
+    <a href="pageDesProfils.html">🔍 Recherche</a>
+     <a href="premium.html">💎 Premium</a> 
+  </div>
+  <div class="nav-right">
+    <button id="authBtn">Connexion</button>
+    <span class="online-dot"></span>
+  </div>
+</nav>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="card">
+  <h2>💎 Activer Premium</h2>
+  <p>
+ - Débloque le chat complet + fonctionnalités avancées <br>
+  </p>
+    <div class="price">10€ / mois</div>
+  <input id="codeInput" placeholder="Entrer votre code (ex: PREM-XXXX)">
+  <button onclick="redeemCode()">Activer</button> <br> <br>
+  <br>
+  <a href="contact.html">💬 Contact Admin</a>
+<br><br>
+   <p>- Pour pouvoir avoir un code contacter les admins </p> <br>
+
+  <p id="status"></p>
+</div>
+
+<script>
+async function redeemCode() {
+
+  const code = document.getElementById("codeInput").value.trim().toUpperCase();
+
+  if (!code) return alert("Code vide");
+
+  const { data: user } = await supabaseClient.auth.getUser();
+
+  if (!user?.user) return alert("Non connecté");
+
+  const deviceId = localStorage.getItem("device_id") || crypto.randomUUID();
+  localStorage.setItem("device_id", deviceId);
+
+  // 1. fetch code
+  const { data: c, error } = await supabaseClient
+    .from("premium_codes")
+    .select("*")
+    .eq("code", code)
+    .single();
+
+  if (error || !c) return alert("❌ Code invalide");
+
+  // 2. déjà utilisé
+  if (c.used) return alert("❌ Code déjà utilisé");
+
+  // 3. expiration check
+  if (c.expires_at && new Date(c.expires_at) < new Date()) {
+    return alert("⛔ Code expiré");
+  }
+
+  // 4. ANTI CHEAT DEVICE LOCK
+  if (c.used_device && c.used_device !== deviceId) {
+    return alert("🚫 Code déjà utilisé sur un autre appareil");
+  }
+
+  // 5. activer premium user
+  const { error: upErr } = await supabaseClient
+    .from("profiles")
+    .update({
+      is_premium: true
+    })
+    .eq("user_id", user.user.id);
+
+  if (upErr) return alert("Erreur activation premium");
+
+  // 6. lock code (ANTI CHEAT)
+  const { error: updErr } = await supabaseClient
+    .from("premium_codes")
+    .update({
+      used: true,
+      used_by: user.user.id,
+      used_device: deviceId,
+      used_at: new Date().toISOString()
+    })
+    .eq("id", c.id);
+
+  if (updErr) return alert("Erreur lock code");
+
+  alert("💎 Premium activé !");
+}
+async function refreshPremiumStatus() {
+
+  const { data: user } = await supabaseClient.auth.getUser();
+
+  const { data } = await supabaseClient
+    .from("profiles")
+    .select("is_premium")
+    .eq("user_id", user.user.id)
+    .single();
+
+  document.getElementById("premiumBadge").textContent =
+    data?.is_premium ? "💎 PREMIUM ACTIF" : "🆓 FREE";
+}
+refreshPremiumStatus();
+</script>
+
+    
+  </div>
+</div>
+
+
+</body>
+</html>

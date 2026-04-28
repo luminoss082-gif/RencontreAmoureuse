@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Rencontre Amoureuse</title>
+
+  <link rel="stylesheet" href="css/style.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+
+  <script src="js/core/session.js" defer></script>
+  <script src="js/auth.js"></script>
+  <script type="module" src="js/ui/search-ui.js"></script>
+
+  <style>
+    body { visibility: hidden; }
+  </style>
+</head>
+
+<body>
+
+<!-- NAV (IDENTIQUE, NON MODIFIÉE) -->
+<nav class="header">
+
+  <div class="nav-left">
+    <a href="index.html">🏠 Accueil</a>
+    <a href="profile.html">👤 Profil</a>
+    <a href="pageDesProfils.html">🔍 Recherche</a>
+    <a href="signup.html">👤 Inscription</a>
+     <a href="contact.html">💬 Contact Admin</a>
+       <a href="adminPage.html">👤 Admin</a>
+  </div>
+
+
+</div>
+</nav>
+
+<!-- MAIN -->
+<main>
+
+  <div class="box">
+  <h1>💘 Rencontre Amoureuse Sérieuse !</h1>
+ <br>
+   <p> Bienvenue sur notre site de rencontre ! 💖</p>
+
+ <br>
+    <p style="text-align:center;">
+      Trouve des profils compatibles et match en temps réel ⚡
+    </p>
+ <br>
+    <img src="image/logo.png" class="avatar" style="width: 500px;">
+  <br>
+ <div class="box">
+<div class="nav-right">
+<button id="authBtn">Connexion</button>
+    <span class="online-dot"></span>
+  </div>
+ <br>
+    <h2>🔥 Profils</h2>
+    <div id="profilesGrid"></div>
+  <br>
+    <p>
+      Crée ton compte → connecte-toi → crée ton profil → trouve l'amour 💘
+    </p>
+    
+ <br>
+  <h2>💎 Premium</h2>
+  <br>
+
+    Passe Premium pour discuter💘
+
+ </div>
+</main>
+
+<!-- 🔒 ADMIN PROTECTION -->
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const { data } = await supabaseClient.auth.getUser();
+
+    if (!data?.user) {
+      document.body.style.visibility = "visible";
+      return;
+    }
+
+    const user = data.user;
+
+    // 👉 TON EMAIL ADMIN
+    const ADMIN_EMAIL = "jeffreygadal@gmail.com";
+
+    if (user.email === ADMIN_EMAIL) {
+      document.getElementById("adminLink").style.display = "inline-block";
+    }
+
+    document.body.style.visibility = "visible";
+
+  } catch (e) {
+    console.error(e);
+    document.body.style.visibility = "visible";
+  }
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+
+  const btn = document.getElementById("authBtn");
+
+  if (btn) {
+    btn.onclick = () => {
+      window.location.href = "login.html";
+    };
+  }
+
+});
+document.addEventListener("DOMContentLoaded", async () => {
+
+  const btn = document.getElementById("authBtn");
+
+  const { data } = await supabaseClient.auth.getUser();
+
+  if (data?.user) {
+    btn.textContent = "Déconnexion";
+
+    btn.onclick = async () => {
+      await supabaseClient.auth.signOut();
+      location.reload();
+    };
+
+  } else {
+    btn.textContent = "Connexion";
+
+    btn.onclick = () => {
+      window.location.href = "login.html";
+    };
+  }
+
+});
+
+</script>
+
+</body>
+</html>

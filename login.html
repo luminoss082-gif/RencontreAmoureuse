@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Connexion</title>
+
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="favicon.ico">
+
+  <!-- SUPABASE -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/core/config.js"></script>
+
+  <!-- AUTH -->
+  <script src="js/core/session.js" defer></script>
+  <script src="js/auth.js"></script>
+<script src="js/ui/search_ui.js"></script>
+
+
+<style>
+body{
+  margin:0;
+  font-family:system-ui;
+  background:linear-gradient(-45deg,#ff4d6d,#7b2ff7,#00c6ff);
+  background-size:400% 400%;
+  animation:bg 12s ease infinite;
+  min-height:100vh;
+}
+
+@keyframes bg{
+  0%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+
+.login-container{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:80vh;
+}
+
+.login-card{
+  background:rgba(255,255,255,0.12);
+  backdrop-filter:blur(15px);
+  padding:30px;
+  border-radius:20px;
+  width:340px;
+  text-align:center;
+  color:white;
+}
+
+input{
+  width:100%;
+  padding:12px;
+  margin:8px 0;
+  border-radius:12px;
+  border:none;
+  outline:none;
+}
+
+button{
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:12px;
+  margin-top:8px;
+  cursor:pointer;
+}
+
+.primary{
+  background:linear-gradient(135deg,#ff4d6d,#ffb703);
+  color:white;
+  font-weight:bold;
+}
+
+.social{
+  background:rgba(255,255,255,0.2);
+  color:white;
+}
+
+.small{
+  font-size:12px;
+  opacity:0.8;
+  margin-top:10px;
+  cursor:pointer;
+}
+
+#error{
+  color:#ffcccc;
+  font-size:13px;
+}
+
+/* NAV FIX MINIMAL */
+.header{
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  height:55px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background:rgba(0,0,0,0.15);
+  backdrop-filter: blur(10px);
+}
+
+.nav-left a{
+  color:white;
+  text-decoration:none;
+  margin-right:10px;
+  font-size:14px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- NAV -->
+<nav class="header">
+  <div class="nav-left">
+    <a href="index.html">🏠 Accueil</a>
+    <a href="profile.html">👤 Profil</a>
+    <a href="pageDesProfils.html">🔍 Recherche</a>
+    <a href="premiumPage.html">💎 Premium</a>
+    <a href="signup.html">👤 Inscription</a>
+  </div>
+</nav>
+
+<!-- LOGIN -->
+<div class="login-container">
+  <div class="login-card">
+
+    <h2>💘 Connexion</h2>
+
+    <input id="email" type="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Mot de passe">
+
+      <button class="primary-btn" onclick="login()">Se connecter</button>
+
+  <!-- google  <button class="social" onclick="loginGoogle()">🔐 Google</button>--> 
+<!-- apple   <button class="social" onclick="loginApple()">🍏 Apple</button> --> 
+<input id="resetEmail" type="email" placeholder="Ton email">
+<button onclick="resetPassword()">Envoyer le lien</button>
+
+<br><br>
+    <p id="error"></p>
+
+      <p class="signup-text">
+      Pas de compte ?
+      <a href="signup.html">Créer un compte</a>
+    </p>
+  </div>
+</div>
+
+<script>
+const supabase = window.supabaseClient;
+
+/* ================= AUTO LOGIN ================= */
+(async () => {
+  const { data } = await supabase.auth.getSession();
+  if (data.session) {
+    window.location.href = "index.html";
+  }
+})();
+
+/* ================= ANTI BRUTE FORCE ================= */
+let attempts = 0;
+let blockedUntil = 0;
+
+
+async function oauthLogin(provider){
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: window.location.origin + "/index.html"
+    }
+  });
+
+  if(error){
+    alert(error.message);
+  }
+}
+
+function loginGoogle(){
+  oauthLogin("google");
+}
+
+function loginApple(){
+  oauthLogin("apple");
+}
+/* ================= RESET ================= */
+async function resetPassword() {
+
+  const email =
+    document.getElementById("email")?.value?.trim();
+
+  if (!email) {
+    alert("Email requis");
+    return;
+  }
+
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + "/reset-password.html"
+  });
+
+  if (error) {
+    console.error(error);
+    alert("❌ " + error.message);
+    return;
+  }
+
+  alert("📩 Email envoyé !");
+}
+
+</script>
+
+
+</body>
+</html>

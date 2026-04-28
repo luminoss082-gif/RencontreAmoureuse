@@ -1,0 +1,93 @@
+body {
+  background: #0b0b0f;
+  color: white;
+}
+
+/* LAYOUT */
+.layout {
+  display: flex;
+  height: 100vh;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: 220px;
+  background: #111;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar button {
+  background: #1c1c1c;
+  color: white;
+  border: none;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.sidebar button:hover {
+  background: #2a2a2a;
+}
+
+/* MAIN */
+.main {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* STATS */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.card {
+  background: #1c1c1c;
+  padding: 15px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+/* PANELS */
+.panel {
+  margin-top: 20px;
+  background: #141414;
+  padding: 15px;
+  border-radius: 12px;
+}
+
+.panel.danger {
+  border: 1px solid red;
+}
+
+/* USERS */
+.user-card {
+  background: #1c1c1c;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 10px;
+}
+
+/* INPUT */
+input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 8px;
+  border: none;
+  background: #222;
+  color: white;
+}
+
+/* ALERTS */
+.alert {
+  background: red;
+  padding: 8px;
+  margin: 5px 0;
+  border-radius: 6px;
+}

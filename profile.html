@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Création profil</title>
+
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/core/config.js"></script>
+<script src="js/auth.js" defer></script>
+
+<style>
+body {
+  visibility:hidden;
+  margin:0;
+  background: linear-gradient(-45deg, #ff4d6d, #7b2ff7, #00c6ff);
+  color:white;
+  font-family:Arial;
+}
+.box {
+  padding: 30px;
+  border-radius: 15px;
+
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(10px);
+
+  text-align: center;
+}
+
+.profile-wrapper {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:90vh;
+  padding:20px;
+}
+
+.profile-card {
+  background:rgba(255,255,255,0.12);
+  backdrop-filter:blur(12px);
+  padding:30px;
+  border-radius:20px;
+  width:95%;
+  max-width:520px;
+  text-align:center;
+}
+
+.avatar {
+  width:120px;
+  height:120px;
+  border-radius:50%;
+  object-fit:cover;
+  cursor:pointer;
+  border:2px solid #ff4d6d;
+}
+
+input, textarea, select {
+  width:100%;
+  margin:8px 0;
+  padding:10px;
+  border-radius:10px;
+  border:none;
+}
+
+/* GALLERY */
+.gallery {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:center;
+  margin-top:10px;
+}
+
+.gallery img {
+  width:60px;
+  height:60px;
+  border-radius:10px;
+  object-fit:cover;
+  cursor:pointer;
+  border:2px solid transparent;
+}
+
+.gallery img:hover {
+  border-color:#ff4d6d;
+}
+
+/* MODAL */
+.modal {
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.85);
+  justify-content:center;
+  align-items:center;
+}
+
+.modal img {
+  max-width:90%;
+  max-height:90%;
+  border-radius:12px;
+}
+
+.close {
+  position:absolute;
+  top:20px;
+  right:20px;
+  font-size:30px;
+  cursor:pointer;
+  color:white;
+}
+</style>
+<nav class="header">
+  <div class="nav-left">
+    <a href="index.html">🏠 Accueil</a>
+    <a href="profile.html">👤 Profil</a>
+    <a href="pageDesProfils.html">🔍 Recherche</a>
+     <a href="premium.html">💎 Premium</a> 
+      <a href="contact.html">💬 Contact Admin</a>
+  </div>
+  <div class="nav-right">
+    <button id="authBtn">Connexion</button>
+    <span class="online-dot"></span>
+  </div>
+</nav>
+</head>
+
+<body>
+
+<div class="profile-wrapper">
+  <div class="profile-card">
+
+    <h1>💘 Mon profil</h1>
+
+    <!-- PHOTO PRINCIPALE -->
+    <img id="mainPhoto" src="https://picsum.photos/120" class="avatar">
+    <input type="file" id="mainInput">
+
+    <!-- MULTI PHOTOS -->
+    <input type="file" id="multiInput" multiple>
+
+    <div class="gallery" id="gallery"></div>
+
+    <input id="prenom" placeholder="Prénom">
+    <input id="nom" placeholder="Nom">
+    <input id="age" type="number" placeholder="Âge">
+    <input id="ville" placeholder="Ville">
+    <textarea id="bio" placeholder="Bio"></textarea>
+
+    <select id="lookingFor">
+      <option value="">Je cherche...</option>
+      <option value="amour">❤️ Amour</option>
+      <option value="amitié">😊 Amitié</option>
+      <option value="fun">🔥 Fun</option>
+    </select>
+
+    <button onclick="saveProfile()">💾 Sauvegarder</button>
+
+  </div>
+</div>
+
+<!-- MODAL IMAGE -->
+<div class="modal" id="imgModal" onclick="closeImg()">
+  <img id="modalImg">
+</div>
+
+<script>
+
+const el = id => document.getElementById(id);
+
+let photos = [];
+
+/* ================= MAIN PHOTO ================= */
+el("mainInput").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    el("mainPhoto").src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+/* ================= MULTI PHOTOS ================= */
+el("multiInput").addEventListener("change", e => {
+  const files = Array.from(e.target.files);
+
+  files.forEach(file => {
+    const reader = new FileReader();
+
+    reader.onload = ev => {
+      photos.push(ev.target.result);
+      renderGallery();
+    };
+
+    reader.readAsDataURL(file);
+  });
+});
+
+/* ================= GALLERY ================= */
+function renderGallery() {
+  const box = el("gallery");
+  box.innerHTML = "";
+
+  photos.forEach(img => {
+    const image = document.createElement("img");
+    image.src = img;
+    image.onclick = () => openImg(img);
+    box.appendChild(image);
+  });
+}
+
+/* ================= MODAL ================= */
+function openImg(src) {
+  el("imgModal").style.display = "flex";
+  el("modalImg").src = src;
+}
+
+function closeImg() {
+  el("imgModal").style.display = "none";
+}
+
+/* ================= SAVE ================= */
+async function saveProfile() {
+
+  const { data } = await supabaseClient.auth.getUser();
+  if (!data?.user) return location.href = "login.html";
+
+  await supabaseClient.from("profiles").upsert({
+    user_id: data.user.id,
+    prenom: el("prenom").value,
+    nom: el("nom").value,
+    age: el("age").value,
+    ville: el("ville").value,
+    bio: el("bio").value,
+    looking_for: el("lookingFor").value,
+    photo: el("mainPhoto").src,
+    photos: photos
+  });
+
+  alert("✔ Profil sauvegardé");
+}
+
+/* ================= LOAD ================= */
+window.addEventListener("DOMContentLoaded", async () => {
+
+  const { data } = await supabaseClient.auth.getUser();
+  if (!data?.user) return location.href = "login.html";
+
+  const { data: profile } = await supabaseClient
+    .from("profiles")
+    .select("*")
+    .eq("user_id", data.user.id)
+    .maybeSingle();
+
+  if (profile) {
+    el("prenom").value = profile.prenom || "";
+    el("nom").value = profile.nom || "";
+    el("age").value = profile.age || "";
+    el("ville").value = profile.ville || "";
+    el("bio").value = profile.bio || "";
+    el("lookingFor").value = profile.looking_for || "";
+
+    el("mainPhoto").src = profile.photo || el("mainPhoto").src;
+    photos = profile.photos || [];
+  }
+
+  renderGallery();
+  document.body.style.visibility = "visible";
+});
+
+</script>
+
+</body>
+</html>
