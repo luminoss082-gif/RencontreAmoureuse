@@ -23,7 +23,6 @@ body {
   100% { background-position:0% 50%; }
 }
 
-/* NAV */
 nav {
   display:flex;
   justify-content:center;
@@ -33,20 +32,21 @@ nav {
   backdrop-filter: blur(10px);
 }
 
-nav a {
+nav a, nav button {
   color:white;
   text-decoration:none;
+  background:none;
+  border:none;
+  cursor:pointer;
   opacity:0.8;
 }
-nav a:hover { opacity:1; }
+nav a:hover, nav button:hover { opacity:1; }
 
-/* LAYOUT */
 .layout {
   display:flex;
   height:calc(100vh - 60px);
 }
 
-/* USERS */
 .users {
   width:320px;
   overflow-y:auto;
@@ -62,9 +62,7 @@ nav a:hover { opacity:1; }
   align-items:center;
 }
 
-.user:hover {
-  background:rgba(255,255,255,0.1);
-}
+.user:hover { background:rgba(255,255,255,0.1); }
 
 .user img {
   width:45px;
@@ -72,7 +70,6 @@ nav a:hover { opacity:1; }
   border-radius:50%;
 }
 
-/* CHAT */
 .chat {
   flex:1;
   display:flex;
@@ -96,19 +93,11 @@ nav a:hover { opacity:1; }
   padding:8px;
   margin:6px;
   border-radius:10px;
-  word-wrap:break-word;
 }
 
-.me {
-  background:#ff4d6d;
-  margin-left:auto;
-}
+.me { background:#ff4d6d; margin-left:auto; }
+.them { background:#333; }
 
-.them {
-  background:#333;
-}
-
-/* INPUT */
 .input {
   display:flex;
   padding:10px;
@@ -129,23 +118,6 @@ nav a:hover { opacity:1; }
   border-radius:8px;
   cursor:pointer;
 }
-
-/* EMOJI */
-#emojiPanel {
-  display:none;
-  position:fixed;
-  bottom:80px;
-  left:20px;
-  background:#111;
-  padding:10px;
-  border-radius:10px;
-}
-
-#emojiPanel span {
-  cursor:pointer;
-  font-size:20px;
-  margin:5px;
-}
 </style>
 </head>
 
@@ -154,9 +126,7 @@ nav a:hover { opacity:1; }
 <nav>
   <a href="index.html">🏠 Accueil</a>
   <a href="profile.html">👤 Profil</a>
-  <a href="pageDesProfils.html">🔍 Profils</a>
-  <a href="adminPage.html">👤 Admin</a>
-  <a href="premium.html">💎 Premium</a>
+  <button onclick="openSupport()">💬 Support</button>
 </nav>
 
 <div class="layout">
@@ -165,30 +135,16 @@ nav a:hover { opacity:1; }
 
   <div class="chat">
 
-    <div class="header" id="chatHeader">
-      💬 Sélectionne un chat
-    </div>
+    <div class="header" id="chatHeader">💬 Sélectionne un chat</div>
 
     <div class="messages" id="messages"></div>
 
     <div class="input">
-      <button onclick="toggleEmoji()">😄</button>
       <input id="input" placeholder="Message...">
-      <button onclick="send()">➤</button>
-      <button onclick="startRecording()">🎤</button>
+      <button onclick="sendMessage()">➤</button>
     </div>
 
   </div>
-</div>
-
-<div id="emojiPanel">
-  <span>😀</span>
-  <span>😂</span>
-  <span>😍</span>
-  <span>🔥</span>
-  <span>❤️</span>
-  <span>👍</span>
-  <span>😎</span>
 </div>
 
 <script>
@@ -198,9 +154,8 @@ const state = {
   current: null
 };
 
-let mediaRecorder;
-let chunks = [];
-let isPremium = false;
+let isSupport = false;
+let supportTicketId = null;
 
 /* INIT */
 document.addEventListener("DOMContentLoaded", async () => {
@@ -210,23 +165,57 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   state.user = data.user;
 
-  await loadUserProfile();
   loadUsers();
   listenMessages();
 });
 
-/* PREMIUM */
-async function loadUserProfile() {
-  const { data } = await supabaseClient
-    .from("profiles")
-    .select("is_premium")
-    .eq("user_id", state.user.id)
-    .single();
+/* ================= SUPPORT ================= */
 
-  isPremium = data?.is_premium || false;
+async function openSupport() {
+
+  isSupport = true;
+  state.current = null;
+
+  document.getElementById("chatHeader").innerText = "💬 Support";
+
+  await initSupportTicket();
+  loadMessages();
 }
 
-/* USERS */
+async function initSupportTicket() {
+
+  const { data: existing } = await supabaseClient
+    .from("support_tickets")
+    .select("*")
+    .eq("user_id", state.user.id)
+    .eq("status", "open")
+    .maybeSingle();
+
+  if (existing) {
+    supportTicketId = existing.id;
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from("support_tickets")
+    .insert({
+      user_id: state.user.id,
+      status: "open"
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error(error);
+    alert("Erreur support (RLS Supabase)");
+    return;
+  }
+
+  supportTicketId = data.id;
+}
+
+/* ================= USERS ================= */
+
 async function loadUsers() {
 
   const { data } = await supabaseClient
@@ -237,7 +226,7 @@ async function loadUsers() {
   const box = document.getElementById("users");
   box.innerHTML = "";
 
-  data.forEach(u => {
+  (data || []).forEach(u => {
 
     const div = document.createElement("div");
     div.className = "user";
@@ -255,25 +244,44 @@ async function loadUsers() {
   });
 }
 
-/* OPEN CHAT */
+/* ================= CHAT ================= */
+
 function openChat(u) {
+
+  isSupport = false;
   state.current = u;
-  document.getElementById("chatHeader").textContent = "💬 " + u.prenom;
+
+  document.getElementById("chatHeader").innerText = "💬 " + u.prenom;
+
   loadMessages();
 }
 
-/* LOAD MSG */
 async function loadMessages() {
 
-  if (!state.current) return;
+  let query;
 
-  const { data } = await supabaseClient
-    .from("messages")
-    .select("*")
-    .or(
-      `and(sender_id.eq.${state.user.id},receiver_id.eq.${state.current.user_id}),and(sender_id.eq.${state.current.user_id},receiver_id.eq.${state.user.id})`
-    )
-    .order("created_at");
+  if (isSupport) {
+
+    query = supabaseClient
+      .from("support_messages")
+      .select("*")
+      .eq("ticket_id", supportTicketId)
+      .order("created_at");
+
+  } else {
+
+    if (!state.current) return;
+
+    const conversationId = [state.user.id, state.current.user_id].sort().join("-");
+
+    query = supabaseClient
+      .from("messages")
+      .select("*")
+      .eq("conversation_id", conversationId)
+      .order("created_at");
+  }
+
+  const { data } = await query;
 
   const box = document.getElementById("messages");
   box.innerHTML = "";
@@ -281,133 +289,84 @@ async function loadMessages() {
   (data || []).forEach(render);
 }
 
-/* RENDER */
+/* ================= SEND ================= */
+
+async function sendMessage() {
+
+  const msg = document.getElementById("input").value.trim();
+  if (!msg) return;
+
+  if (isSupport) {
+
+    await supabaseClient.from("support_messages").insert({
+      ticket_id: supportTicketId,
+      sender_id: state.user.id,
+      message: msg
+    });
+
+  } else {
+
+    const conversationId = [state.user.id, state.current.user_id].sort().join("-");
+
+    await supabaseClient.from("messages").insert({
+      sender_id: state.user.id,
+      receiver_id: state.current.user_id,
+      conversation_id: conversationId,
+      message: msg
+    });
+  }
+
+  document.getElementById("input").value = "";
+  loadMessages();
+}
+
+/* ================= RENDER ================= */
+
 function render(m) {
 
   const div = document.createElement("div");
   div.className = "msg " + (m.sender_id === state.user.id ? "me" : "them");
 
-  div.textContent = m.content || "";
-
-  if (m.sender_id === state.user.id) {
-
-    const tick = document.createElement("div");
-    tick.style.fontSize = "10px";
-    tick.textContent = m.is_read ? "✔✔ vu" : "✔ envoyé";
-    div.appendChild(tick);
-
-    const del = document.createElement("div");
-    del.textContent = "🗑";
-    del.style.cursor = "pointer";
-    del.onclick = () => deleteMessage(m.id);
-    div.appendChild(del);
-  }
+  div.textContent = m.message;
 
   document.getElementById("messages").appendChild(div);
 }
 
-/* SEND */
-async function send() {
+/* ================= REALTIME ================= */
 
-  if (!isPremium) {
-    alert("🔒 Premium requis");
-    return;
-  }
-
-  if (!state.current) return;
-
-  const input = document.getElementById("input");
-  const text = input.value.trim();
-
-  if (!text) return;
-
-  await supabaseClient.from("messages").insert({
-    sender_id: state.user.id,
-    receiver_id: state.current.user_id,
-    content: text,
-    is_read: false
-  });
-
-  input.value = "";
-}
-
-/* DELETE */
-async function deleteMessage(id) {
-  await supabaseClient.from("messages").delete().eq("id", id);
-  loadMessages();
-}
-
-/* REALTIME */
 function listenMessages() {
 
   supabaseClient
-    .channel("msg")
+    .channel("chat")
     .on("postgres_changes",
       { event:"INSERT", schema:"public", table:"messages" },
       payload => {
 
-        const m = payload.new;
-        if (!state.current) return;
+        if (!state.current || isSupport) return;
 
-        if (
-          (m.sender_id === state.current.user_id && m.receiver_id === state.user.id) ||
-          (m.sender_id === state.user.id && m.receiver_id === state.current.user_id)
-        ) {
+        const m = payload.new;
+
+        const conv = [state.user.id, state.current.user_id].sort().join("-");
+
+        if (m.conversation_id === conv) {
           render(m);
         }
       })
     .subscribe();
-}
 
-/* EMOJI */
-function toggleEmoji() {
-  const p = document.getElementById("emojiPanel");
-  p.style.display = p.style.display === "block" ? "none" : "block";
-}
+  supabaseClient
+    .channel("support")
+    .on("postgres_changes",
+      { event:"INSERT", schema:"public", table:"support_messages" },
+      payload => {
 
-document.getElementById("emojiPanel").onclick = (e) => {
-  if (e.target.tagName === "SPAN") {
-    document.getElementById("input").value += e.target.textContent;
-  }
-};
+        if (!isSupport) return;
 
-/* VOICE */
-async function startRecording() {
-
-  if (!state.current) return;
-
-  const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
-
-  mediaRecorder = new MediaRecorder(stream);
-  chunks = [];
-
-  mediaRecorder.ondataavailable = e => chunks.push(e.data);
-
-  mediaRecorder.onstop = async () => {
-
-    const blob = new Blob(chunks, { type:"audio/webm" });
-    const reader = new FileReader();
-
-    reader.onloadend = async () => {
-
-      await supabaseClient.from("messages").insert({
-        sender_id: state.user.id,
-        receiver_id: state.current.user_id,
-        audio: reader.result
-      });
-
-      loadMessages();
-    };
-
-    reader.readAsDataURL(blob);
-  };
-
-  mediaRecorder.start();
-
-  setTimeout(() => {
-    mediaRecorder.stop();
-    stream.getTracks().forEach(t => t.stop());
-  }, 4000);
+        if (payload.new.ticket_id === supportTicketId) {
+          render(payload.new);
+        }
+      })
+    .subscribe();
 }
 
 </script>

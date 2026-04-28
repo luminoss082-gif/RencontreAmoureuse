@@ -59,35 +59,65 @@ document.addEventListener("DOMContentLoaded", async () => {
   user = data.user;
 
   await initTicket();
-  loadMessages();
+  await loadMessages();
   listenMessages();
 });
 
 /* CREATE OR GET TICKET */
+async function assignAdmin() {
+
+  const { data: admins } = await supabaseClient
+    .from("admins")
+    .select("*")
+    .order("workload", { ascending: true });
+
+  return admins?.[0];
+}
 async function initTicket() {
 
-  const { data } = await supabaseClient
+  const { data: existing } = await supabaseClient
     .from("support_tickets")
     .select("*")
     .eq("user_id", user.id)
     .eq("status","open")
     .maybeSingle();
 
-  if (data) {
-    ticketId = data.id;
-  } else {
-
-    const { data: newTicket } = await supabaseClient
-      .from("support_tickets")
-      .insert({
-        user_id: user.id,
-        status:"open"
-      })
-      .select()
-      .single();
-
-    ticketId = newTicket.id;
+  if (existing) {
+    ticketId = existing.id;
+    return;
   }
+
+  const { data: newTicket, error } = await supabaseClient
+    .from("support_tickets")
+    .insert({
+      user_id: user.id,
+      status: "open"
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Ticket error:", error);
+    alert("Erreur création ticket support");
+    return;
+  }
+
+  ticketId = newTicket.id;
+}
+async function createTicket(userId) {
+
+  const admin = await assignAdmin();
+
+  await supabaseClient.from("support_tickets").insert({
+    user_id: userId,
+    assigned_admin: admin.id,
+    status:"open"
+  });
+
+  await supabaseClient
+    .from("admins")
+    .update({ workload: admin.workload + 1 })
+    .eq("id", admin.id);
 }
 
 /* SEND MESSAGE */
@@ -96,25 +126,34 @@ async function sendMsg() {
   const msg = document.getElementById("msg").value.trim();
   if (!msg) return;
 
-  await supabaseClient
+  const { error } = await supabaseClient
     .from("support_messages")
     .insert({
       ticket_id: ticketId,
       sender_id: user.id,
-      message: msg
+      message: msg,
+      created_at: new Date().toISOString()
     });
 
+  if (error) {
+    console.error(error);
+    alert("Erreur envoi message");
+    return;
+  }
+
   document.getElementById("msg").value = "";
+
+  await loadMessages();
 }
 
-/* LOAD MESSAGES */
+/* LOAD */
 async function loadMessages() {
 
   const { data } = await supabaseClient
     .from("support_messages")
     .select("*")
     .eq("ticket_id", ticketId)
-    .order("created_at");
+    .order("created_at", { ascending:true });
 
   const box = document.getElementById("chat");
   box.innerHTML = "";
@@ -149,7 +188,6 @@ function listenMessages() {
           render(payload.new);
         }
 
-        // 🔴 NOTIF ADMIN (si admin dashboard ouvert)
         console.log("🔴 nouveau message support");
       }
     )

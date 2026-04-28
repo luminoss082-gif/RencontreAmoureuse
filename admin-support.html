@@ -2,139 +2,76 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Admin Support</title>
+<title>Admin Support Pro</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/core/config.js"></script>
 
 <style>
-body{
-  margin:0;
-  font-family:Arial;
-  background:#0f172a;
-  color:white;
-}
+body {margin:0;font-family:Arial;background:#0f172a;color:white}
+.container {display:flex;height:100vh}
 
-.layout{
-  display:flex;
-  height:100vh;
-}
-
-/* LEFT TICKETS */
-.left{
-  width:320px;
+/* LEFT */
+.left {
+  width:30%;
   background:#111827;
   overflow:auto;
-  border-right:1px solid #222;
 }
 
-.ticket{
-  padding:12px;
+.ticket {
+  padding:10px;
   border-bottom:1px solid #222;
   cursor:pointer;
 }
+.ticket:hover {background:#1f2937}
 
-.ticket:hover{
-  background:#1f2937;
-}
-
-.active{
-  background:#374151;
-}
-
-/* CHAT */
-.right{
+/* RIGHT */
+.right {
   flex:1;
   display:flex;
   flex-direction:column;
 }
 
-.header{
-  padding:15px;
-  background:#111827;
-  border-bottom:1px solid #222;
-}
-
-.chat{
+.chat {
   flex:1;
   overflow:auto;
   padding:10px;
+  background:#111;
 }
 
-.msg{
+.msg {
   margin:5px;
   padding:8px;
   border-radius:8px;
   max-width:60%;
 }
+.me {background:#ff4d6d;margin-left:auto}
+.them {background:#333}
 
-.me{background:#ff4d6d;margin-left:auto}
-.them{background:#333}
-
-.input{
-  display:flex;
-  padding:10px;
-  background:#111827;
-  gap:10px;
-}
-
-input{
-  flex:1;
-  padding:10px;
-  border-radius:8px;
-  border:none;
-}
-
-button{
-  padding:10px;
-  border:none;
-  cursor:pointer;
-  border-radius:8px;
-}
-nav {
-  padding:15px;
-  background:rgba(0,0,0,0.4);
-  backdrop-filter:blur(10px);
-}
-
-nav a {
-  color:white;
-  margin-right:15px;
-  text-decoration:none;
-  opacity:0.8;
-}
-nav a:hover { opacity:1; }
-
+input,button {padding:10px}
 </style>
 </head>
-<nav>
 
-  <div class="nav-left">
-    <a href="index.html">🏠 Accueil</a>
-    <a href="profile.html">👤 Profil</a>
-    <a href="pageDesProfils.html">🔍 Recherche</a>
-<a href="adminPage.html">🔍 Admin</a>
-</nav>
 <body>
+<nav>
+  <a href="index.html">🏠 Accueil</a>
+  <a href="profile.html">👤 Profil</a>
+  <a href="pageDesProfils.html">🔍 Recherche</a>
+</nav>
 
-<div class="layout">
+<div class="container">
 
-<!-- LEFT -->
+<!-- LEFT TICKETS -->
 <div class="left" id="tickets"></div>
 
-<!-- RIGHT -->
+<!-- RIGHT CHAT -->
 <div class="right">
-
-  <div class="header" id="header">
-    💬 Sélectionne un ticket
-  </div>
 
   <div class="chat" id="chat"></div>
 
-  <div class="input">
-    <input id="msg" placeholder="Répondre...">
-    <button onclick="sendMsg()">Envoyer</button>
-    <button onclick="closeTicket()">Fermer</button>
+  <div style="display:flex">
+    <input id="msg" style="flex:1" placeholder="Répondre...">
+    <button onclick="send()">Envoyer</button>
   </div>
 
 </div>
@@ -143,8 +80,8 @@ nav a:hover { opacity:1; }
 
 <script>
 
-let admin;
 let currentTicket = null;
+let admin = null;
 
 /* INIT */
 document.addEventListener("DOMContentLoaded", async () => {
@@ -155,7 +92,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   admin = data.user;
 
   loadTickets();
-  listenMessages();
+  listenTickets();
 });
 
 /* LOAD TICKETS */
@@ -164,17 +101,21 @@ async function loadTickets() {
   const { data } = await supabaseClient
     .from("support_tickets")
     .select("*")
-    .eq("status","open")
     .order("created_at",{ascending:false});
 
   const box = document.getElementById("tickets");
-  box.innerHTML = "";
+  box.innerHTML="";
 
-  (data || []).forEach(t => {
+  (data||[]).forEach(t=>{
 
     const div = document.createElement("div");
-    div.className = "ticket";
-    div.textContent = "Ticket " + t.id.slice(0,6);
+    div.className="ticket";
+
+    div.innerHTML = `
+      🎫 Ticket<br>
+      ${t.status} <br>
+      ${t.assigned_admin || "non assigné"}
+    `;
 
     div.onclick = () => openTicket(t);
 
@@ -182,117 +123,88 @@ async function loadTickets() {
   });
 }
 
-/* OPEN TICKET */
-async function openTicket(t){
+/* OPEN */
+async function openTicket(t) {
 
   currentTicket = t;
 
-  document.getElementById("header").textContent =
-    "💬 Ticket " + t.id.slice(0,6);
-
-  loadMessages();
-
-  // assign admin si vide
-  if (!t.assigned_admin) {
-
-    await supabaseClient
-      .from("support_tickets")
-      .update({ assigned_admin: admin.id })
-      .eq("id", t.id);
-  }
-}
-
-/* LOAD MESSAGES */
-async function loadMessages(){
-
-  if (!currentTicket) return;
+  document.getElementById("chat").innerHTML="";
 
   const { data } = await supabaseClient
     .from("support_messages")
     .select("*")
-    .eq("ticket_id", currentTicket.id)
+    .eq("ticket_id", t.id)
     .order("created_at");
 
-  const box = document.getElementById("chat");
-  box.innerHTML = "";
-
-  (data || []).forEach(render);
+  data.forEach(render);
 }
 
-/* RENDER MSG */
+/* RENDER */
 function render(m){
 
   const div = document.createElement("div");
-  div.className = "msg " + (m.sender_id === admin.id ? "me" : "them");
+  div.className="msg " + (m.sender_id === admin.id ? "me":"them");
   div.textContent = m.message;
 
   document.getElementById("chat").appendChild(div);
 }
 
-/* SEND MESSAGE */
-async function sendMsg(){
+/* SEND */
+async function sendMsg() {
 
-  if (!currentTicket) return;
+  if (!user?.id) return alert("Non connecté");
+  if (!ticketId) return alert("Ticket pas prêt");
 
   const msg = document.getElementById("msg").value.trim();
   if (!msg) return;
 
-  await supabaseClient
+  const { error } = await supabaseClient
     .from("support_messages")
     .insert({
-      ticket_id: currentTicket.id,
-      sender_id: admin.id,
-      message: msg
+      ticket_id: ticketId,
+      sender_id: user.id,
+      message: msg,
+      created_at: new Date().toISOString()
     });
 
-  document.getElementById("msg").value = "";
+  if (error) {
+    console.error(error);
+    alert("Erreur envoi: " + error.message);
+    return;
+  }
 
+  document.getElementById("msg").value = "";
   loadMessages();
 }
 
-/* CLOSE TICKET */
-async function closeTicket(){
-
-  if (!currentTicket) return;
-
-  await supabaseClient
-    .from("support_tickets")
-    .update({ status:"closed" })
-    .eq("id", currentTicket.id);
-
-  alert("Ticket fermé");
-
-  currentTicket = null;
-
-  loadTickets();
-  document.getElementById("chat").innerHTML = "";
-  document.getElementById("header").textContent = "💬 Sélectionne un ticket";
-}
-
-/* REALTIME 🔴 */
-function listenMessages(){
+/* REALTIME */
+function listenTickets(){
 
   supabaseClient
-    .channel("admin_support")
+    .channel("support_admin")
     .on("postgres_changes",
-      {
-        event:"INSERT",
-        schema:"public",
-        table:"support_messages"
-      },
+      {event:"INSERT",schema:"public",table:"support_messages"},
       payload => {
 
-        if (currentTicket &&
-            payload.new.ticket_id === currentTicket.id) {
-
+        if(currentTicket && payload.new.ticket_id === currentTicket.id){
           render(payload.new);
         }
 
-        console.log("🔴 nouveau message support");
-      })
+        loadTickets();
+      }
+    )
     .subscribe();
 }
 
+supabaseClient
+  .channel("notif")
+  .on("postgres_changes",
+    {event:"INSERT",schema:"public",table:"support_messages"},
+    () => {
+      alert("🔴 Nouveau message support !");
+    }
+  )
+  .subscribe();
 </script>
 
 </body>
