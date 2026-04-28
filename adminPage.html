@@ -7,20 +7,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="js/core/config.js"></script>
-<script src="admin-support.js" defer></script>
-<script src="js/auth.js" defer></script>
 
 <style>
-
-  body{margin:0;font-family:Arial;background:#111;color:white}
-.container{display:flex;height:100vh}
-.left{width:30%;background:#222;overflow:auto}
-.right{flex:1;padding:10px}
-.ticket{padding:10px;border-bottom:1px solid #333;cursor:pointer}
-.chat{height:80vh;overflow:auto;background:#222;padding:10px}
-.msg{margin:5px;padding:8px;border-radius:8px}
-.me{background:#ff4d6d;margin-left:auto}
-.them{background:#333
+body {
+  margin:0;
+  font-family:Arial;
+  background:#0f172a;
+  color:white;
 }
 
 nav {
@@ -41,7 +34,7 @@ nav a:hover { opacity:1; }
 
 .grid {
   display:grid;
-  grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
   gap:20px;
 }
 
@@ -57,13 +50,6 @@ button {
   margin:3px;
   cursor:pointer;
 }
-a {
-  color:white;
-  text-decoration:none;
-} 
-a:hover {
-  opacity:0.8;
-}
 </style>
 </head>
 
@@ -73,6 +59,10 @@ a:hover {
   <a href="index.html">🏠 Accueil</a>
   <a href="profile.html">👤 Profil</a>
   <a href="pageDesProfils.html">🔍 Recherche</a>
+<a href="admin-support.html">
+  💬 Support <span id="supportBadge">🔴</span>
+</a>
+<a href="adminPage.html">👤 Admin</a>
 </nav>
 
 <div class="container">
@@ -82,15 +72,6 @@ a:hover {
 <div id="status">Chargement...</div>
 
 <div class="grid">
-
-  <div class="card">
-  <h2>👨‍💻 Gestion Admins</h2>
-  <input id="adminName" placeholder="Nom">
-  <input id="adminPhone" placeholder="Téléphone (ex: 336...)">
-  <input id="adminAvatar" placeholder="Avatar URL">
-  <button onclick="addAdmin()">➕ Ajouter Admin</button>
-  <div id="adminsList"></div>
-</div>
 
   <div class="card">
     <h2>👤 Users</h2>
@@ -103,41 +84,57 @@ a:hover {
   </div>
 
   <div class="card">
-    <h2>📜 Logs admin</h2>
+    <h2>💬 Messages</h2>
+    <canvas id="messagesChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>🔑 Codes Premium</h2>
+    <button onclick="generateCode()">➕ Générer 30 jours</button>
+    <div id="codesList"></div>
+  </div>
+
+  <div class="card">
+    <h2>👥 Users</h2>
+    <div id="usersList"></div>
+  </div>
+
+  <div class="card">
+    <h2>📜 Logs</h2>
     <div id="logsList"></div>
   </div>
 
-
-</div>
-
-</div>
-<div class="card">
-<a href="admin-support.html">💬 Support Admin</a>
-</div>
-<hr>
-<div class="card">
-  <h2>📊 Stats Admins</h2>
-  <div id="adminStats"></div>
-  <button onclick="resetWorkload()">♻️ Reset charge</button>
-</div>
   <div class="card">
-    <h2>🔑 Codes Premium</h2>
-    <button onclick="generateCode()">➕ Générer code 30 jours</button>
-    <div id="codesList"></div>
+    <h2>👨‍💻 Admins</h2>
+    <div id="adminsList"></div>
   </div>
-<div class="card">
-  <h2>👥 Liste des utilisateurs</h2>
 
-  <input id="searchUser" placeholder="🔎 Rechercher..." oninput="loadUsers()">
-
-  <div id="allUsersList"></div>
+  <div class="card">
+  <h2>💬 Support</h2>
+  <p>Gérer les tickets utilisateurs en temps réel</p>
+  <a href="admin-support.html">
+    <button>Ouvrir le support</button>
+  </a>
 </div>
+</div>
+
 </div>
 
 <script>
 
 let state = { user:null };
+async function checkSupportNotif() {
 
+  const { count } = await supabaseClient
+    .from("support_messages")
+    .select("*", { count:"exact", head:true })
+    .eq("read", false);
+
+  document.getElementById("supportBadge").style.display =
+    count > 0 ? "inline" : "none";
+}
+
+checkSupportNotif();
 /* ================= INIT ================= */
 document.addEventListener("DOMContentLoaded", async () => {
 
@@ -159,23 +156,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("status").textContent = "✔ Admin connecté";
 
-  await loadDashboard();
-  await loadCodes();
-  await loadUsers();
-  await loadLogs();
-  await loadCodeStats();
-await loadAdminsAdmin();
-  cleanExpiredCodes();
-  await loadAdminStats();
+  loadDashboard();
+  loadUsers();
+  loadCodes();
+  loadLogs();
+  loadAdmins();
 });
 
 /* ================= DASHBOARD ================= */
 async function loadDashboard() {
-await supabaseClient.from("admins").insert({
-  name: "Support",
-  phone: "336XXXX",
-  avatar: "url"
-});
+
   const { count: users } = await supabaseClient
     .from("profiles")
     .select("*", { count:"exact", head:true });
@@ -194,81 +184,37 @@ await supabaseClient.from("admins").insert({
     data:{ labels:["Users"], datasets:[{ data:[users] }] }
   });
 
+  new Chart(document.getElementById("premiumChart"), {
+    type:"doughnut",
+    data:{ labels:["Premium","Free"], datasets:[{ data:[premium, users-premium] }] }
+  });
+
   new Chart(document.getElementById("messagesChart"), {
     type:"line",
     data:{ labels:["Messages"], datasets:[{ data:[messages] }] }
   });
-
-  new Chart(document.getElementById("premiumChart"), {
-    type:"doughnut",
-    data:{
-      labels:["Premium","Free"],
-      datasets:[{ data:[premium, users-premium] }]
-    }
-    
-  });
-  supabaseClient
-  .channel("support_admin")
-  .on("postgres_changes", {
-    event:"INSERT",
-    schema:"public",
-    table:"support_messages"
-  }, payload => {
-
-    alert("🔴 Nouveau message support !");
-    console.log(payload.new);
-  })
-  .subscribe();
-}
-
-async function resetWorkload() {
-
-  await supabaseClient
-    .from("admins")
-    .update({ workload: 0 })
-    .neq("id", "null");
-
-  alert("Charge reset");
-  loadAdminStats();
 }
 
 /* ================= PREMIUM CODES ================= */
 async function generateCode() {
 
-  try {
+  const code = "PREM-" + Math.random().toString(36).substring(2,10).toUpperCase();
 
-    const code = "PREM-" + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const expires = new Date();
+  expires.setDate(expires.getDate() + 30);
 
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
+  const { error } = await supabaseClient
+    .from("premium_codes")
+    .insert({
+      code,
+      used:false,
+      expires_at:expires.toISOString()
+    });
 
-    const { error } = await supabaseClient
-      .from("premium_codes")
-      .insert([
-        {
-          code: code,
-          used: false,
-          expires_at: expiresAt.toISOString()
-        }
-      ]);
+  if (error) return alert(error.message);
 
-    if (error) {
-      console.error("SUPABASE ERROR:", error);
-      alert("Erreur création code: " + error.message);
-      return;
-    }
-
-    await log("generate_code_30d", code);
-
-    loadCodes();
-    loadCodeStats();
-
-    alert("✔ Code créé : " + code);
-
-  } catch (e) {
-    console.error(e);
-    alert("Erreur JS generateCode");
-  }
+  loadCodes();
+  alert("Code créé : " + code);
 }
 
 async function loadCodes() {
@@ -276,100 +222,35 @@ async function loadCodes() {
   const { data } = await supabaseClient
     .from("premium_codes")
     .select("*")
-    .order("created_at", { ascending:false });
+    .order("created_at",{ascending:false});
 
   const box = document.getElementById("codesList");
-  box.innerHTML = "";
+  box.innerHTML="";
 
-  (data || []).forEach(c => {
+  (data||[]).forEach(c=>{
 
     const expired = c.expires_at && new Date(c.expires_at) < new Date();
 
     const div = document.createElement("div");
-    div.style.padding = "10px";
-    div.style.margin = "5px 0";
-    div.style.background = "rgba(255,255,255,0.05)";
-    div.style.borderRadius = "10px";
-
     div.innerHTML = `
       <b>${c.code}</b><br>
       ${c.used ? "❌ utilisé" : expired ? "⛔ expiré" : "✅ actif"}<br>
-      <small>${c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "∞"}</small>
-      <br><br>
-      <button onclick="copyCode('${c.code}')">📋</button>
+      <button onclick="copy('${c.code}')">📋</button>
       <button onclick="deleteCode('${c.id}')">🗑</button>
+      <hr>
     `;
 
     box.appendChild(div);
   });
 }
 
-function copyCode(code) {
+function copy(code){
   navigator.clipboard.writeText(code);
-  alert("Code copié");
 }
 
-async function deleteCode(id) {
-  await supabaseClient.from("premium_codes").delete().eq("id", id);
-  await log("delete_code", id);
+async function deleteCode(id){
+  await supabaseClient.from("premium_codes").delete().eq("id",id);
   loadCodes();
-}
-
-/* ================= STATS ================= */
-async function loadCodeStats() {
-
-  const { data } = await supabaseClient
-    .from("premium_codes")
-    .select("*");
-
-  if (!data) return;
-
-  const now = new Date();
-
-  let used = 0;
-  let expired = 0;
-  let active = 0;
-
-  data.forEach(c => {
-    if (c.used) used++;
-    else if (c.expires_at && new Date(c.expires_at) < now) expired++;
-    else active++;
-  });
-
-  new Chart(document.getElementById("codesChart"), {
-    type:"doughnut",
-    data:{
-      labels:["Actifs","Utilisés","Expirés"],
-      datasets:[{ data:[active, used, expired] }]
-    }
-  });
-}
-async function loadAdminStats() {
-
-  const { data } = await supabaseClient
-    .from("admins")
-    .select("*");
-
-  const box = document.getElementById("adminStats");
-  box.innerHTML = "";
-
-  (data || []).forEach(a => {
-
-    const div = document.createElement("div");
-
-    div.style.padding = "10px";
-    div.style.margin = "5px 0";
-    div.style.background = "rgba(255,255,255,0.05)";
-    div.style.borderRadius = "10px";
-
-    div.innerHTML = `
-      <b>${a.name}</b><br>
-      📩 Contacts: ${a.total_contacts || 0}<br>
-      ⚖️ Charge: ${a.workload || 0}
-    `;
-
-    box.appendChild(div);
-  });
 }
 
 /* ================= USERS ================= */
@@ -380,68 +261,57 @@ async function loadUsers() {
     .select("*");
 
   const box = document.getElementById("usersList");
-  box.innerHTML = "";
+  box.innerHTML="";
 
-  (data || []).forEach(u => {
+  (data||[]).forEach(u=>{
 
     const div = document.createElement("div");
-    div.style.padding = "10px";
-    div.style.margin = "5px 0";
-    div.style.background = "rgba(255,255,255,0.05)";
-    div.style.borderRadius = "10px";
-
     div.innerHTML = `
-      <b>${u.prenom || "User"}</b><br>
-      ${u.is_premium ? "💎 PREMIUM" : "🆓 FREE"}<br><br>
+      <b>${u.prenom||"User"}</b><br>
+      ${u.is_premium?"💎":"🆓"} ${u.banned?"🚫":"✔"}<br>
 
-      <button onclick="togglePremium('${u.user_id}', ${u.is_premium})">
-        ${u.is_premium ? "❌ Retirer" : "💎 Donner"}
-      </button>
-
-      <button onclick="ban('${u.user_id}')">🚫 Ban</button>
-      <button onclick="deleteUser('${u.user_id}')">🗑 Delete</button>
+      <button onclick="togglePremium('${u.user_id}',${u.is_premium})">Premium</button>
+      <button onclick="toggleBan('${u.user_id}',${u.banned})">Ban</button>
     `;
 
     box.appendChild(div);
   });
 }
 
-async function togglePremium(id, status) {
-
-  await supabaseClient
-    .from("profiles")
-    .update({ is_premium: !status })
-    .eq("user_id", id);
-
-  await log("toggle_premium", id);
-
+async function togglePremium(id,status){
+  await supabaseClient.from("profiles").update({is_premium:!status}).eq("user_id",id);
   loadUsers();
 }
 
-async function ban(id){
-  await supabaseClient.from("profiles").update({banned:true}).eq("user_id",id);
-  await log("ban",id);
+async function toggleBan(id,status){
+  await supabaseClient.from("profiles").update({banned:!status}).eq("user_id",id);
   loadUsers();
 }
 
-async function deleteUser(id){
-  await supabaseClient.from("profiles").delete().eq("user_id",id);
-  await log("delete_user",id);
-  loadUsers();
-}
+/* ================= ADMINS ================= */
+async function loadAdmins(){
 
-/* ================= LOGS ================= */
-async function log(action, target) {
+  const { data } = await supabaseClient.from("admins").select("*");
 
-  await supabaseClient.from("admin_logs").insert({
-    admin_id: state.user.id,
-    action,
-    target_id: target,
-    created_at: new Date().toISOString()
+  const box = document.getElementById("adminsList");
+  box.innerHTML="";
+
+  (data||[]).forEach(a=>{
+    const div = document.createElement("div");
+    div.innerHTML = `
+      <b>${a.name}</b> - ${a.phone}
+      <button onclick="deleteAdmin('${a.id}')">🗑</button>
+    `;
+    box.appendChild(div);
   });
 }
 
+async function deleteAdmin(id){
+  await supabaseClient.from("admins").delete().eq("id",id);
+  loadAdmins();
+}
 
+/* ================= LOGS ================= */
 async function loadLogs(){
 
   const { data } = await supabaseClient
@@ -450,190 +320,14 @@ async function loadLogs(){
     .order("created_at",{ascending:false})
     .limit(20);
 
-  const box = document.getElementById("logsList");
-  box.innerHTML = "";
+  const box=document.getElementById("logsList");
+  box.innerHTML="";
 
-  (data || []).forEach(l => {
-    const div = document.createElement("div");
-    div.textContent = `${l.action} → ${l.target_id}`;
-    box.appendChild(div);
+  (data||[]).forEach(l=>{
+    box.innerHTML += `<div>${l.action} → ${l.target_id}</div>`;
   });
 }
 
-/* ================= CLEAN ================= */
-async function cleanExpiredCodes() {
-
-  const now = new Date().toISOString();
-
-  await supabaseClient
-    .from("premium_codes")
-    .delete()
-    .lt("expires_at", now)
-    .eq("used", false);
-}
-/* ================= ADMINS ================= */
-
-/* ADD ADMIN */
-async function addAdmin() {
-
-  const name = document.getElementById("adminName").value;
-  const phone = document.getElementById("adminPhone").value;
-  const avatar = document.getElementById("adminAvatar").value;
-
-  if (!name || !phone) {
-    alert("Remplis les champs");
-    return;
-  }
-
-  const { error } = await supabaseClient
-    .from("admins")
-    .insert({
-      name,
-      phone,
-      avatar,
-      active: true
-    });
-
-  if (error) {
-    console.error(error);
-    alert("Erreur ajout admin");
-    return;
-  }
-
-  await log("add_admin", name);
-
-  loadAdminsAdmin();
-
-  alert("✔ Admin ajouté");
-
-  document.getElementById("adminName").value = "";
-  document.getElementById("adminPhone").value = "";
-  document.getElementById("adminAvatar").value = "";
-}
-
-/* LOAD ADMINS (ADMIN PANEL) */
-async function loadAdminsAdmin() {
-
-  const { data } = await supabaseClient
-    .from("admins")
-    .select("*");
-
-  const box = document.getElementById("adminsList");
-  box.innerHTML = "";
-
-  (data || []).forEach(a => {
-
-    const div = document.createElement("div");
-
-    div.style.padding = "10px";
-    div.style.margin = "5px 0";
-    div.style.background = "rgba(255,255,255,0.05)";
-    div.style.borderRadius = "10px";
-
-    div.innerHTML = `
-      <b>${a.name}</b><br>
-      ${a.phone}<br><br>
-
-      <button onclick="deleteAdmin('${a.id}')">🗑 Supprimer</button>
-    `;
-
-    box.appendChild(div);
-  });
-}
-
-/* DELETE ADMIN */
-async function deleteAdmin(id) {
-
-  await supabaseClient
-    .from("admins")
-    .delete()
-    .eq("id", id);
-
-  await log("delete_admin", id);
-
-  loadAdminsAdmin();
-}
-/* ================= USERS LIST ================= */
-
-async function loadUsers() {
-
-  const search = document.getElementById("searchUser").value.toLowerCase();
-
-  const { data, error } = await supabaseClient
-    .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  const box = document.getElementById("allUsersList");
-  box.innerHTML = "";
-
-  (data || [])
-    .filter(u =>
-      (u.prenom || "").toLowerCase().includes(search) ||
-      (u.ville || "").toLowerCase().includes(search)
-    )
-    .forEach(u => {
-
-      const div = document.createElement("div");
-
-      div.style.padding = "10px";
-      div.style.margin = "5px 0";
-      div.style.background = "rgba(255,255,255,0.05)";
-      div.style.borderRadius = "10px";
-
-      div.innerHTML = `
-        <b>${u.prenom || "User"}</b> (${u.age || "?"})<br>
-        ${u.ville || ""}<br>
-
-        ${u.is_premium ? "💎 Premium" : "🆓 Free"} |
-        ${u.banned ? "🚫 Banni" : "✅ Actif"}
-
-        <br><br>
-
-        <button onclick="togglePremium('${u.user_id}', ${u.is_premium})">
-          ${u.is_premium ? "❌ Retirer Premium" : "💎 Donner Premium"}
-        </button>
-
-        <button onclick="toggleBan('${u.user_id}', ${u.banned})">
-          ${u.banned ? "✅ Déban" : "🚫 Ban"}
-        </button>
-
-        <button onclick="viewUser('${u.user_id}')">👁 Voir</button>
-
-        <button onclick="deleteUser('${u.user_id}')">🗑 Supprimer</button>
-      `;
-
-      box.appendChild(div);
-    });
-}
-/* BAN / UNBAN */
-async function toggleBan(userId, current) {
-
-  const { error } = await supabaseClient
-    .from("profiles")
-    .update({ banned: !current })
-    .eq("user_id", userId);
-
-  if (error) {
-    console.error(error);
-    alert("Erreur ban");
-    return;
-  }
-
-  await log("toggle_ban", userId);
-
-  loadUsers();
-}
-
-/* VIEW USER */
-function viewUser(userId) {
-  window.open("profile.html?id=" + userId, "_blank");
-}
 </script>
 
 </body>
