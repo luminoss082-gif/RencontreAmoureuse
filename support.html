@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Support Chat</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/core/config.js"></script>
+
+<style>
+body{margin:0;font-family:Arial;background:#111;color:white}
+.chat{height:70vh;overflow:auto;background:#222;padding:10px;border-radius:10px}
+.msg{margin:5px;padding:8px;border-radius:8px;max-width:60%}
+.me{background:#ff4d6d;margin-left:auto}
+.them{background:#333}
+input,button{padding:10px;margin-top:10px}
+nav {
+  padding:15px;
+  background:rgba(0,0,0,0.4);
+  backdrop-filter:blur(10px);
+}
+
+nav a {
+  color:white;
+  margin-right:15px;
+  text-decoration:none;
+  opacity:0.8;
+}
+nav a:hover { opacity:1; }
+</style>
+</head>
+
+<body>
+
+<nav>
+  <a href="index.html">🏠 Accueil</a>
+  <a href="profile.html">👤 Profil</a>
+  <a href="pageDesProfils.html">🔍 Recherche</a>
+</nav>
+
+<h2>💬 Support</h2>
+
+<div class="chat" id="chat"></div>
+
+<input id="msg" placeholder="Message...">
+<button onclick="sendMsg()">Envoyer</button>
+
+<script>
+
+let user;
+let ticketId = null;
+
+/* INIT */
+document.addEventListener("DOMContentLoaded", async () => {
+
+  const { data } = await supabaseClient.auth.getUser();
+  if (!data?.user) return location.href="login.html";
+
+  user = data.user;
+
+  await initTicket();
+  loadMessages();
+  listenMessages();
+});
+
+/* CREATE OR GET TICKET */
+async function initTicket() {
+
+  const { data } = await supabaseClient
+    .from("support_tickets")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("status","open")
+    .maybeSingle();
+
+  if (data) {
+    ticketId = data.id;
+  } else {
+
+    const { data: newTicket } = await supabaseClient
+      .from("support_tickets")
+      .insert({
+        user_id: user.id,
+        status:"open"
+      })
+      .select()
+      .single();
+
+    ticketId = newTicket.id;
+  }
+}
+
+/* SEND MESSAGE */
+async function sendMsg() {
+
+  const msg = document.getElementById("msg").value.trim();
+  if (!msg) return;
+
+  await supabaseClient
+    .from("support_messages")
+    .insert({
+      ticket_id: ticketId,
+      sender_id: user.id,
+      message: msg
+    });
+
+  document.getElementById("msg").value = "";
+}
+
+/* LOAD MESSAGES */
+async function loadMessages() {
+
+  const { data } = await supabaseClient
+    .from("support_messages")
+    .select("*")
+    .eq("ticket_id", ticketId)
+    .order("created_at");
+
+  const box = document.getElementById("chat");
+  box.innerHTML = "";
+
+  (data || []).forEach(render);
+}
+
+/* RENDER */
+function render(m) {
+
+  const div = document.createElement("div");
+  div.className = "msg " + (m.sender_id === user.id ? "me" : "them");
+  div.textContent = m.message;
+
+  document.getElementById("chat").appendChild(div);
+}
+
+/* REALTIME 🔴 */
+function listenMessages() {
+
+  supabaseClient
+    .channel("support")
+    .on("postgres_changes",
+      {
+        event:"INSERT",
+        schema:"public",
+        table:"support_messages"
+      },
+      payload => {
+
+        if (payload.new.ticket_id === ticketId) {
+          render(payload.new);
+        }
+
+        // 🔴 NOTIF ADMIN (si admin dashboard ouvert)
+        console.log("🔴 nouveau message support");
+      }
+    )
+    .subscribe();
+}
+
+</script>
+
+</body>
+</html>

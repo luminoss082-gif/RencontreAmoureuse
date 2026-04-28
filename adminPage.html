@@ -7,13 +7,20 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="js/core/config.js"></script>
+<script src="admin-support.js" defer></script>
+<script src="js/auth.js" defer></script>
 
 <style>
-body {
-  margin:0;
-  font-family:Arial;
-  background: linear-gradient(135deg,#0f172a,#020617);
-  color:white;
+
+  body{margin:0;font-family:Arial;background:#111;color:white}
+.container{display:flex;height:100vh}
+.left{width:30%;background:#222;overflow:auto}
+.right{flex:1;padding:10px}
+.ticket{padding:10px;border-bottom:1px solid #333;cursor:pointer}
+.chat{height:80vh;overflow:auto;background:#222;padding:10px}
+.msg{margin:5px;padding:8px;border-radius:8px}
+.me{background:#ff4d6d;margin-left:auto}
+.them{background:#333
 }
 
 nav {
@@ -50,6 +57,13 @@ button {
   margin:3px;
   cursor:pointer;
 }
+a {
+  color:white;
+  text-decoration:none;
+} 
+a:hover {
+  opacity:0.8;
+}
 </style>
 </head>
 
@@ -70,6 +84,15 @@ button {
 <div class="grid">
 
   <div class="card">
+  <h2>👨‍💻 Gestion Admins</h2>
+  <input id="adminName" placeholder="Nom">
+  <input id="adminPhone" placeholder="Téléphone (ex: 336...)">
+  <input id="adminAvatar" placeholder="Avatar URL">
+  <button onclick="addAdmin()">➕ Ajouter Admin</button>
+  <div id="adminsList"></div>
+</div>
+
+  <div class="card">
     <h2>👤 Users</h2>
     <canvas id="usersChart"></canvas>
   </div>
@@ -84,21 +107,14 @@ button {
     <div id="logsList"></div>
   </div>
 
-<div class="card">
-  <h2>👨‍💻 Gestion Admins</h2>
-  <input id="adminName" placeholder="Nom">
-  <input id="adminPhone" placeholder="Téléphone (ex: 336...)">
-  <input id="adminAvatar" placeholder="Avatar URL">
-  <button onclick="addAdmin()">➕ Ajouter Admin</button>
-  <div id="adminsList"></div>
-</div>
 
-<div class="card">
-  <h2>📊 Stats Codes</h2>
-  <canvas id="codesChart" width="200" height="200" style="display: block; box-sizing: border-box; height: 300px; width: 300px;"></canvas>
 </div>
 
 </div>
+<div class="card">
+<a href="admin-support.html">💬 Support Admin</a>
+</div>
+<hr>
 <div class="card">
   <h2>📊 Stats Admins</h2>
   <div id="adminStats"></div>
@@ -191,6 +207,18 @@ await supabaseClient.from("admins").insert({
     }
     
   });
+  supabaseClient
+  .channel("support_admin")
+  .on("postgres_changes", {
+    event:"INSERT",
+    schema:"public",
+    table:"support_messages"
+  }, payload => {
+
+    alert("🔴 Nouveau message support !");
+    console.log(payload.new);
+  })
+  .subscribe();
 }
 
 async function resetWorkload() {

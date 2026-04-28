@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Admin Support</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/core/config.js"></script>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:#0f172a;
+  color:white;
+}
+
+.layout{
+  display:flex;
+  height:100vh;
+}
+
+/* LEFT TICKETS */
+.left{
+  width:320px;
+  background:#111827;
+  overflow:auto;
+  border-right:1px solid #222;
+}
+
+.ticket{
+  padding:12px;
+  border-bottom:1px solid #222;
+  cursor:pointer;
+}
+
+.ticket:hover{
+  background:#1f2937;
+}
+
+.active{
+  background:#374151;
+}
+
+/* CHAT */
+.right{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+}
+
+.header{
+  padding:15px;
+  background:#111827;
+  border-bottom:1px solid #222;
+}
+
+.chat{
+  flex:1;
+  overflow:auto;
+  padding:10px;
+}
+
+.msg{
+  margin:5px;
+  padding:8px;
+  border-radius:8px;
+  max-width:60%;
+}
+
+.me{background:#ff4d6d;margin-left:auto}
+.them{background:#333}
+
+.input{
+  display:flex;
+  padding:10px;
+  background:#111827;
+  gap:10px;
+}
+
+input{
+  flex:1;
+  padding:10px;
+  border-radius:8px;
+  border:none;
+}
+
+button{
+  padding:10px;
+  border:none;
+  cursor:pointer;
+  border-radius:8px;
+}
+nav {
+  padding:15px;
+  background:rgba(0,0,0,0.4);
+  backdrop-filter:blur(10px);
+}
+
+nav a {
+  color:white;
+  margin-right:15px;
+  text-decoration:none;
+  opacity:0.8;
+}
+nav a:hover { opacity:1; }
+
+</style>
+</head>
+<nav>
+
+  <div class="nav-left">
+    <a href="index.html">🏠 Accueil</a>
+    <a href="profile.html">👤 Profil</a>
+    <a href="pageDesProfils.html">🔍 Recherche</a>
+<a href="adminPage.html">🔍 Admin</a>
+</nav>
+<body>
+
+<div class="layout">
+
+<!-- LEFT -->
+<div class="left" id="tickets"></div>
+
+<!-- RIGHT -->
+<div class="right">
+
+  <div class="header" id="header">
+    💬 Sélectionne un ticket
+  </div>
+
+  <div class="chat" id="chat"></div>
+
+  <div class="input">
+    <input id="msg" placeholder="Répondre...">
+    <button onclick="sendMsg()">Envoyer</button>
+    <button onclick="closeTicket()">Fermer</button>
+  </div>
+
+</div>
+
+</div>
+
+<script>
+
+let admin;
+let currentTicket = null;
+
+/* INIT */
+document.addEventListener("DOMContentLoaded", async () => {
+
+  const { data } = await supabaseClient.auth.getUser();
+  if (!data?.user) return location.href="login.html";
+
+  admin = data.user;
+
+  loadTickets();
+  listenMessages();
+});
+
+/* LOAD TICKETS */
+async function loadTickets() {
+
+  const { data } = await supabaseClient
+    .from("support_tickets")
+    .select("*")
+    .eq("status","open")
+    .order("created_at",{ascending:false});
+
+  const box = document.getElementById("tickets");
+  box.innerHTML = "";
+
+  (data || []).forEach(t => {
+
+    const div = document.createElement("div");
+    div.className = "ticket";
+    div.textContent = "Ticket " + t.id.slice(0,6);
+
+    div.onclick = () => openTicket(t);
+
+    box.appendChild(div);
+  });
+}
+
+/* OPEN TICKET */
+async function openTicket(t){
+
+  currentTicket = t;
+
+  document.getElementById("header").textContent =
+    "💬 Ticket " + t.id.slice(0,6);
+
+  loadMessages();
+
+  // assign admin si vide
+  if (!t.assigned_admin) {
+
+    await supabaseClient
+      .from("support_tickets")
+      .update({ assigned_admin: admin.id })
+      .eq("id", t.id);
+  }
+}
+
+/* LOAD MESSAGES */
+async function loadMessages(){
+
+  if (!currentTicket) return;
+
+  const { data } = await supabaseClient
+    .from("support_messages")
+    .select("*")
+    .eq("ticket_id", currentTicket.id)
+    .order("created_at");
+
+  const box = document.getElementById("chat");
+  box.innerHTML = "";
+
+  (data || []).forEach(render);
+}
+
+/* RENDER MSG */
+function render(m){
+
+  const div = document.createElement("div");
+  div.className = "msg " + (m.sender_id === admin.id ? "me" : "them");
+  div.textContent = m.message;
+
+  document.getElementById("chat").appendChild(div);
+}
+
+/* SEND MESSAGE */
+async function sendMsg(){
+
+  if (!currentTicket) return;
+
+  const msg = document.getElementById("msg").value.trim();
+  if (!msg) return;
+
+  await supabaseClient
+    .from("support_messages")
+    .insert({
+      ticket_id: currentTicket.id,
+      sender_id: admin.id,
+      message: msg
+    });
+
+  document.getElementById("msg").value = "";
+
+  loadMessages();
+}
+
+/* CLOSE TICKET */
+async function closeTicket(){
+
+  if (!currentTicket) return;
+
+  await supabaseClient
+    .from("support_tickets")
+    .update({ status:"closed" })
+    .eq("id", currentTicket.id);
+
+  alert("Ticket fermé");
+
+  currentTicket = null;
+
+  loadTickets();
+  document.getElementById("chat").innerHTML = "";
+  document.getElementById("header").textContent = "💬 Sélectionne un ticket";
+}
+
+/* REALTIME 🔴 */
+function listenMessages(){
+
+  supabaseClient
+    .channel("admin_support")
+    .on("postgres_changes",
+      {
+        event:"INSERT",
+        schema:"public",
+        table:"support_messages"
+      },
+      payload => {
+
+        if (currentTicket &&
+            payload.new.ticket_id === currentTicket.id) {
+
+          render(payload.new);
+        }
+
+        console.log("🔴 nouveau message support");
+      })
+    .subscribe();
+}
+
+</script>
+
+</body>
+</html>
